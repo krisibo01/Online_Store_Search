@@ -1,0 +1,68 @@
+﻿<Window  x:Class="Online_Store_Search.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="800">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ComboBox row -->
+        <StackPanel Orientation="Horizontal" Grid.Row="0">
+            <ComboBox x:Name="tableComboBox"
+                      ItemsSource="{Binding Tables}"
+                      SelectedItem="{Binding SelectedTable}" 
+                      Width="100" Margin="10"/>
+
+            <ComboBox x:Name="columnComboBox"
+                      ItemsSource="{Binding Columns}"
+                      SelectedItem="{Binding SelectedColumn}"
+                      Width="100" Margin="10"/>
+
+            <ComboBox x:Name="valueComboBox"
+                      ItemsSource="{Binding Values}"
+                      SelectedItem="{Binding SelectedValue}" 
+                      Width="100" Margin="10"/>
+
+            <ItemsControl ItemsSource="{Binding Filters}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox x:Name="filterColumnComboBox"
+                          ItemsSource="{Binding DataContext.Columns, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                          SelectedItem="{Binding SelectedColumn}"
+                          Width="100" Margin="10"
+                          Visibility="{Binding Visible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                            <ComboBox x:Name="filterValueComboBox"
+                          ItemsSource="{Binding DataContext.Values, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                          SelectedItem="{Binding SelectedValue}" 
+                          Width="100" Margin="10"
+                          Visibility="{Binding Visible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+
+            <Button Content="Add Filter" Command="{Binding AddFilterCommand}" Margin="10" />
+            <Button Content="Remove Filters" Command="{Binding RemoveFiltersCommand}" Margin="10" />
+            <Button Content="Search" Command="{Binding SearchCommand}" Margin="10" />
+        </StackPanel>
+
+        <TabControl Grid.Row="1">
+            <TabItem Header="Results">
+                <DataGrid ItemsSource="{Binding CurrentDataSet}" AutoGenerateColumns="True"/>
+            </TabItem>
+        </TabControl>
+    </Grid>
+
+</Window>
