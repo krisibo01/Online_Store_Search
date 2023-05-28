@@ -6,38 +6,24 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Linq.Dynamic.Core;
+using System.Linq.Expressions;
+using System.Text.RegularExpressions;
 
 namespace Online_Store_Search.Model
 {
-    public static class SearchService
+    public class SearchService
     {
         private readonly OnlineStoreContext _context;
+        private Dictionary<string, Tuple<int, int>[]> priceRanges;
 
-        public PcStoreSearch(PCBuilderContext context)
+        public SearchService(OnlineStoreContext context)
         {
-            _context = context;
-        }
-        public static void ExecuteSearchCommand()
-        {
-            // Generate filter expression
-            var filterExpression = GetFilterExpression();
-
-            // Set the CurrentDataSet based on the selected table and filters
-            if (_collections.TryGetValue(_selectedTable, out var collection))
-            {
-                var filteredCollection = FilterCollection(collection.ToList(), filterExpression);
-                var filteredDataTable = SearchService.ToDataTable(filteredCollection, SelectedTable);
-                CurrentDataSet = filteredDataTable.DefaultView;
-
-                collection.Clear();
-                foreach (IProduct product in filteredCollection)
-                {
-                    collection.Add(product);
-                }
-            }
+             _context = context;
         }
 
-        public static DataTable ToDataTable<T>(List<T> items, string tableName)
+
+        public DataTable ToDataTable(List<IProduct> items, string tableName)
         {
             if (items.Count == 0)
                 return new DataTable();
@@ -107,42 +93,89 @@ namespace Online_Store_Search.Model
                 dataTable.Rows.Add(newRow);
             }
 
-
             return dataTable;
         }
 
-        public static void FilterDataSet(string _selectedTable, string _selectedColumn, string _selectedValue)
+        public DataTable FilterDataSet(string selectedTable, string selectedColumn1, string value1, string selectedColumn2, string value2)
         {
             // Using reflection to get the property (DbSet) by name
-            var dbSetProperty = _context.GetType().GetProperty(_selectedTable);
+            var dbSetProperty = _context.GetType().GetProperty(selectedTable);
             if (dbSetProperty == null)
             {
-                throw new InvalidOperationException($"Unsupported table: {_selectedTable}");
+                throw new InvalidOperationException($"Unsupported table: {selectedTable}");
             }
 
-            var dbSet = (DbSet<IProduct>)dbSetProperty.GetValue(_context);
+            // Get the DbSet and queryable
+            var dbSet = (IQueryable<IProduct>)dbSetProperty.GetValue(_context);
 
-            // Create an IQueryable that will hold the query
-            IQueryable<IProduct> query = dbSet;
+            // Prepare the filter
+            List<string> filterParts = new List<string>();
+            List<object> filterValues = new List<object>();
 
-            // Apply filters
-            if (!string.IsNullOrEmpty(_selectedColumn) && !string.IsNullOrEmpty(_selectedValue))
+            ParseValue(selectedColumn1, value1, filterParts, filterValues);
+            ParseValue(selectedColumn2, value2, filterParts, filterValues);
+
+            // Apply the filter if it's not empty
+            if (filterParts.Count > 0)
             {
-                query = query.Where($"{_selectedColumn} = @0", _selectedValue);
+                string filterExpression = string.Join(" AND ", filterParts);
+                dbSet = dbSet.Where(filterExpression, filterValues.ToArray());
             }
 
-            foreach (var filter in Filters)
+            // Execute the query
+            var filteredCollection = dbSet.ToList();
+
+            // Convert the collection to a DataTable
+            var filteredDataTable = ToDataTable(filteredCollection, selectedTable);
+
+            // Return the DataTable
+            return filteredDataTable;
+        }
+
+        private void ParseValue(string selectedColumn, string value, List<string> filterParts, List<object> filterValues)
+        {
+            if (!string.IsNullOrEmpty(selectedColumn) && value != null)
             {
-                if (!string.IsNullOrEmpty(filter.SelectedColumn) && !string.IsNullOrEmpty(filter.SelectedValue))
+                var intervalMatch = Regex.Match(value, @"([<>]=?)(\d+)&&([<>]=?)(\d+)");
+
+                if (intervalMatch.Success)
                 {
-                    query = query.Where($"{filter.SelectedColumn} = @0", filter.SelectedValue);
+                    var operatorPart1 = intervalMatch.Groups[1].Value;
+                    var valuePart1 = int.Parse(intervalMatch.Groups[2].Value);
+                    filterParts.Add($"{selectedColumn} {operatorPart1} @{filterValues.Count}");
+                    filterValues.Add(valuePart1);
+
+                    var operatorPart2 = intervalMatch.Groups[3].Value;
+                    var valuePart2 = int.Parse(intervalMatch.Groups[4].Value);
+                    filterParts.Add($"{selectedColumn} {operatorPart2} @{filterValues.Count}");
+                    filterValues.Add(valuePart2);
+                }
+                else
+                {
+                    var match = Regex.Match(value, @"([<>]=?)(\d+)");
+                    if (match.Success)
+                    {
+                        var operatorPart = match.Groups[1].Value;
+                        var valuePart = int.Parse(match.Groups[2].Value);
+                        filterParts.Add($"{selectedColumn} {operatorPart} @{filterValues.Count}");
+                        filterValues.Add(valuePart);
+                    }
+                    else if (int.TryParse(value, out int parsedValue))
+                    {
+                        filterParts.Add($"{selectedColumn} = @{filterValues.Count}");
+                        filterValues.Add(parsedValue);
+                    }
+                    else
+                    {
+                        filterParts.Add($"{selectedColumn} = @{filterValues.Count}");
+                        filterValues.Add(value);
+                    }
                 }
             }
-
-            // Execute the query and update the current data set
-            var filteredCollection = query.ToList();
-            var filteredDataTable = ToDataTable(filteredCollection, _selectedTable);
-            CurrentDataSet = filteredDataTable.DefaultView;
         }
+
     }
+
+
 }
+
